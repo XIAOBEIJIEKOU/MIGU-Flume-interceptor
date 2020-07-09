@@ -1,2 +1,3 @@
 # MIGU-Flume-interceptor
-自定义Flume组件的过滤器，对flume采集的行文本进行处理拼接成需要的格式，
+自定义Flume组件的过滤器，对flume采集的行文本进行处理拼接成需要的格式
+下载pom文件和代码之后打包放入flume的lib文件夹即可，在source的配置文件中指定使用该过滤器即可
