@@ -1,0 +1,123 @@
+package cn.migu.interceptor;
+import org.apache.commons.codec.Charsets;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.flume.Context;
+import org.apache.flume.Event;
+import org.apache.flume.interceptor.Interceptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+public class TcpInterceptor implements  Interceptor{
+
+    private static final Logger logger = LoggerFactory.getLogger(Interceptor.class);
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+    private static int i=0;
+    @Override
+    public void initialize() {
+
+    }
+
+    @Override
+    public Event intercept(Event event) {
+//        System.out.println("==========================intercept event=======================");
+//        String fileName = event.getHeaders().get("fileName");
+        String oldBody = new String(event.getBody());
+        String newBody = "";
+//        logger.info("oldBody={}.header={}",oldBody,event.getHeaders());
+
+        String time = oldBody.substring(1,20);
+        long timestamp = 0;
+        try {
+            Date date = sdf.parse(time);
+            timestamp = date.getTime()+i;
+            i++;
+            if(i>999){
+                i=0;
+            }
+        } catch (ParseException e) {
+            logger.error("e={},time={}",e.getMessage(),time);
+            e.printStackTrace();
+        }
+        oldBody = oldBody.substring(25);
+
+/*
+        log.Warn("login:%s,%s,%s,%s,%s",appid,id,key,lAddr,rAddr)
+        参数1:appid  （无数据表示登录失败）
+        参数2:用户di（imei/androidid）
+        参数3:web 登录的token
+        参数4:本地ip和端口
+        参数5:远程ip和端口
+        appid,deviceId,token,localIp,remoteIp,type,time*/
+        try{
+            if(oldBody.startsWith("login:")){
+                newBody=oldBody.substring(6,oldBody.indexOf(",",50)).concat(",null,"+TcpType.LOGIN.getName());
+            }else if(oldBody.startsWith("handshake faild:")){
+                newBody=oldBody.substring(16,oldBody.indexOf(",",50)).concat(",null,"+TcpType.LOGIN_ERROR.getName());
+//            }else if(oldBody.startsWith("heartbeat:")){
+//                newBody=oldBody.substring(10).concat(",null,null,"+TcpType.HEARTBEAT.getCode())+TcpType.HEARTBEAT.getName();
+            }else if(oldBody.startsWith("token change:")){
+                newBody=oldBody.substring(13).concat(","+TcpType.TOKEN_CHANGE.getName());
+            }else if(oldBody.startsWith("token quit:")){
+                newBody=oldBody.substring(11).concat(",null,"+TcpType.LOGOUT.getName());
+            }else if(oldBody.startsWith("timer limit:")){
+                newBody=oldBody.substring(12,oldBody.indexOf(",null,",50)).concat(","+TcpType.KICKOUT.getName());
+            }else{
+                return null;
+            }
+        }catch (IndexOutOfBoundsException e){
+            logger.error("StringIndexOutOfBoundsException",oldBody);
+        }
+
+        String appid = newBody.split(",",-1)[0];
+        if(StringUtils.isBlank(appid)){
+            logger.error("appid is null:{}",newBody);
+            return null;
+        }
+        newBody = newBody.concat(","+timestamp);
+        event.setBody(newBody.getBytes(Charsets.UTF_8));
+
+        logger.info("new body = {}",newBody);
+
+
+        return event;
+    }
+
+    @Override
+    public List<Event> intercept(List<Event> list) {
+//        System.out.println("==========================intercept list=======================");
+        List<Event> newlist = new ArrayList<>();
+        for (Event e:list){
+            Event newEvent = intercept(e);
+            if(newEvent!=null){
+                newlist.add(newEvent);
+            }
+
+        }
+        return newlist;
+    }
+
+    @Override
+    public void close() {
+
+    }
+    public static class Builder implements Interceptor.Builder{
+
+        @Override
+        public Interceptor build() {
+            return new TcpInterceptor();
+        }
+
+        @Override
+        public void configure(Context context) {
+            logger.info("============================start config");
+            logger.info("context={}",context);
+
+        }
+    }
+}
